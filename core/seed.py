@@ -119,6 +119,10 @@ def seed_users(session: Session):
         (7, "arnaud.jousset@epf.fr"),
         (8, "etienne.gibaud@epf.fr"),
         *ADDITIONAL_STUDENT_USERS,
+        # Un utilisateur par rôle scopé, sans aucun autre rôle (#84).
+        (23, "oceens.facilitator@epf.fr"),
+        (24, "oceens.program-manager@epf.fr"),
+        (25, "oceens.campus-manager@epf.fr"),
     ]
     for u_data in user_data:
         user = User(user_id=u_data[0], mail=u_data[1])
@@ -138,6 +142,9 @@ def seed_roles(session: Session):
         (6, "campus_manager:Montpellier"),
         (7, "admin"),
         (8, "admin"),
+        (23, "facilitator:MDAI5"),
+        (24, "program_manager:MDAI5"),
+        (25, "campus_manager:Montpellier"),
     ]
     for r_data in role_data:
         role = Role(user_id=r_data[0], role=r_data[1])
