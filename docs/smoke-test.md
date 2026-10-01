@@ -30,30 +30,40 @@ de ce test.
 Identique sur les deux systèmes (une seule ligne, sans continuation) :
 
 ```
-python -m compileall -q main.py sondage_loader.py survey_loader_from_xlsx.py summaries_generator_daemon.py core models routers services
+python -m compileall -q src
 git diff --check
 ```
 
 ## 1. Démarrage local, sans credentials
 
-Dans un clone neuf de la branche, avec un environnement virtuel vide.
+Dans un clone neuf de la branche, sans environnement virtuel. Il faut
+[`uv`](https://docs.astral.sh/uv/) : `uv sync` crée `.venv` avec le Python
+de `.python-version` (3.12), y installe les versions figées dans `uv.lock`, et
+installe le package `oceens` en mode éditable.
 
 **Windows (PowerShell)**
 
 ```powershell
 Copy-Item .env.example .env
-py -3.12 -m venv .venv
-.venv\Scripts\python.exe -m pip install -r requirements.txt
-.venv\Scripts\uvicorn.exe main:app --port 8000
+uv sync
+.venv\Scripts\python.exe -m uvicorn oceens.main:app --port 8000
+```
+
+Si Windows bloque le `python.exe` de `.venv` créé par uv (« Une stratégie de
+contrôle d'application a bloqué ce fichier »), supprimer `.venv`, le recréer
+avec l'interpréteur standard, puis relancer `uv sync`, qui le réutilise :
+
+```powershell
+& (uv python find 3.12) -m venv .venv
+uv sync
 ```
 
 **macOS / Linux (bash)**
 
 ```bash
 cp .env.example .env
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/uvicorn main:app --port 8000
+uv sync
+.venv/bin/uvicorn oceens.main:app --port 8000
 ```
 
 Attendu, sans aucun credential Entra ni clé LLM :
@@ -66,6 +76,33 @@ Attendu, sans aucun credential Entra ni clé LLM :
 
 Les logs de démarrage créent les tables, insèrent le jeu de démonstration et
 ne contiennent ni erreur ni trace d'exception.
+
+## 1 bis. Démarrage depuis un autre répertoire
+
+L'application ne dépend pas du répertoire courant : templates, fichiers
+statiques, CSV du seed, base et `.env` sont trouvés à partir du package. On
+relance la même commande depuis un autre dossier, en appelant l'interpréteur
+par son chemin absolu. Arrêter d'abord l'instance de l'étape 1.
+
+**Windows (PowerShell)**
+
+```powershell
+$repo = (Get-Location).Path
+Push-Location $env:TEMP
+& "$repo\.venv\Scripts\python.exe" -m uvicorn oceens.main:app --port 8000
+Pop-Location
+```
+
+**macOS / Linux (bash)**
+
+```bash
+repo=$(pwd)
+(cd /tmp && "$repo/.venv/bin/uvicorn" oceens.main:app --port 8000)
+```
+
+Attendu : les mêmes réponses qu'à l'étape 1, et la même base (pas de nouveau
+seed dans les logs). `GET /dev/login` en 200 prouve que le `.env` du dépôt a
+été lu : la route n'existe qu'avec `AUTH_MODE=dev`, que seul le `.env` fournit.
 
 ## 2. Démarrage avec Docker
 
@@ -97,24 +134,27 @@ superviseur ou une CI voie l'échec.
 Le `.env` doit être écarté pour les deux derniers cas : `load_dotenv()` y relirait
 `AUTH_MODE=dev` et l'application démarrerait normalement, en code 0.
 
+À lancer depuis la racine du dépôt : avec `python -c`, `load_dotenv()` cherche
+le `.env` dans le répertoire courant, et non à partir du package.
+
 **Windows (PowerShell)**
 
 ```powershell
 # AUTH_MODE invalide
 $env:AUTH_MODE = "bogus"
-.venv\Scripts\python.exe -c "import main"; $LASTEXITCODE   # 1
+.venv\Scripts\python.exe -c "import oceens.main"; $LASTEXITCODE   # 1
 Remove-Item Env:AUTH_MODE
 
 # ENTRA_* manquantes, sans .env
 Rename-Item .env .env.bak
 'AUTH_MODE','ENTRA_CLIENT_ID','ENTRA_CLIENT_SECRET','ENTRA_TENANT_ID' |
   ForEach-Object { Remove-Item "Env:$_" -ErrorAction SilentlyContinue }
-.venv\Scripts\python.exe -c "import main"; $LASTEXITCODE   # 1
+.venv\Scripts\python.exe -c "import oceens.main"; $LASTEXITCODE   # 1
 
 # SECRET_KEY manquante en entra, sans .env
 $env:ENTRA_CLIENT_ID = "x"; $env:ENTRA_CLIENT_SECRET = "x"; $env:ENTRA_TENANT_ID = "x"
 Remove-Item Env:SECRET_KEY -ErrorAction SilentlyContinue
-.venv\Scripts\python.exe -c "import main"; $LASTEXITCODE   # 1
+.venv\Scripts\python.exe -c "import oceens.main"; $LASTEXITCODE   # 1
 'ENTRA_CLIENT_ID','ENTRA_CLIENT_SECRET','ENTRA_TENANT_ID' |
   ForEach-Object { Remove-Item "Env:$_" }
 Rename-Item .env.bak .env
@@ -124,16 +164,16 @@ Rename-Item .env.bak .env
 
 ```bash
 # AUTH_MODE invalide
-AUTH_MODE=bogus .venv/bin/python -c "import main"; echo $?   # 1
+AUTH_MODE=bogus .venv/bin/python -c "import oceens.main"; echo $?   # 1
 
 # ENTRA_* manquantes, sans .env
 mv .env .env.bak
 env -u AUTH_MODE -u ENTRA_CLIENT_ID -u ENTRA_CLIENT_SECRET -u ENTRA_TENANT_ID \
-  .venv/bin/python -c "import main"; echo $?   # 1
+  .venv/bin/python -c "import oceens.main"; echo $?   # 1
 
 # SECRET_KEY manquante en entra, sans .env
 env -u AUTH_MODE -u SECRET_KEY ENTRA_CLIENT_ID=x ENTRA_CLIENT_SECRET=x ENTRA_TENANT_ID=x \
-  .venv/bin/python -c "import main"; echo $?   # 1
+  .venv/bin/python -c "import oceens.main"; echo $?   # 1
 mv .env.bak .env
 ```
 
@@ -145,8 +185,9 @@ troisième. En témoin, `AUTH_MODE=dev` sort en 0, même sans `SECRET_KEY`.
 ## 4. Absence de clé LLM
 
 `.env.example` livre `LLM_API_KEY` **vide** : l'application démarre
-normalement, seules les synthèses sont indisponibles. Avec le daemon
-`summaries_generator_daemon.py` lancé, une demande de synthèse est marquée en
+normalement, seules les synthèses sont indisponibles. Avec le daemon lancé
+(`.venv\Scripts\python.exe -m oceens.summaries_generator_daemon` sous Windows,
+`.venv/bin/oceens-summaries` sous macOS / Linux), une demande de synthèse est marquée en
 erreur de configuration (`http_status` 500, « variable d'environnement
 absente ou vide ») et aucun appel n'est fait au fournisseur.
 
@@ -162,7 +203,7 @@ LLM_API_KEY=<votre clé>
 Vérification rapide, sans passer par l'interface. **La clé doit se trouver dans
 l'environnement de cette commande, et pas seulement dans le `.env`** :
 `load_dotenv()` est appelé par l'application, par le daemon et par le module
-d'authentification, mais pas par `services/llm_client.py`, seul module importé
+d'authentification, mais pas par `src/oceens/services/llm_client.py`, seul module importé
 ici. Sans le préfixe ci-dessous, la commande lève `LLMConfigError` quel que
 soit le contenu du `.env`.
 
@@ -174,14 +215,14 @@ variable changent.
 
 ```powershell
 $env:LLM_API_KEY = "<votre clé>"
-.venv\Scripts\python.exe -c "from types import SimpleNamespace; from services import llm_client as c; p = SimpleNamespace(name='Ollama EPF', api_type='ollama', base_url='https://locallm.mde.epf.fr/ollama', api_key_env='LLM_API_KEY', default_model='gemma4:26b'); print(c.check_model(p, 'gemma4:26b')); print(c.ping_generation(p, 'gemma4:26b'))"
+.venv\Scripts\python.exe -c "from types import SimpleNamespace; from oceens.services import llm_client as c; p = SimpleNamespace(name='Ollama EPF', api_type='ollama', base_url='https://locallm.mde.epf.fr/ollama', api_key_env='LLM_API_KEY', default_model='gemma4:26b'); print(c.check_model(p, 'gemma4:26b')); print(c.ping_generation(p, 'gemma4:26b'))"
 Remove-Item Env:LLM_API_KEY
 ```
 
 **macOS / Linux (bash)**
 
 ```bash
-LLM_API_KEY=<votre clé> .venv/bin/python -c "from types import SimpleNamespace; from services import llm_client as c; p = SimpleNamespace(name='Ollama EPF', api_type='ollama', base_url='https://locallm.mde.epf.fr/ollama', api_key_env='LLM_API_KEY', default_model='gemma4:26b'); print(c.check_model(p, 'gemma4:26b')); print(c.ping_generation(p, 'gemma4:26b'))"
+LLM_API_KEY=<votre clé> .venv/bin/python -c "from types import SimpleNamespace; from oceens.services import llm_client as c; p = SimpleNamespace(name='Ollama EPF', api_type='ollama', base_url='https://locallm.mde.epf.fr/ollama', api_key_env='LLM_API_KEY', default_model='gemma4:26b'); print(c.check_model(p, 'gemma4:26b')); print(c.ping_generation(p, 'gemma4:26b'))"
 ```
 
 Attendu : `True`, puis `(True, None, None)`. `check_model` seul ne suffit pas —
@@ -191,7 +232,7 @@ variable, la même commande lève `LLMConfigError` : c'est le comportement de
 l'étape 4.
 
 Ensuite, bout en bout : demander la génération des synthèses d'un sondage avec
-`summaries_generator_daemon.py` lancé. Cette moitié-là n'a pas besoin du
+le daemon lancé (commandes de l'étape 4). Cette moitié-là n'a pas besoin du
 préfixe : le daemon, lui, lit le `.env`. Les lignes passent de `http_status` 0
 à 200, une à la fois (le daemon est séquentiel), et la synthèse s'affiche en
 HTML. Ne jamais committer la clé : `.env` est ignoré par Git.
