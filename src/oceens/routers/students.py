@@ -11,6 +11,7 @@ from sqlmodel import delete, func, select, Session
 from oceens.core.database import SessionDep
 from oceens.models import Respondent, Survey, User
 from oceens.core.security import can_manage_survey, require_roles
+from oceens.core.auth import _is_email_allowed
 
 router = APIRouter(tags=["API"], prefix="/api")
 
