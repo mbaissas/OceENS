@@ -288,6 +288,7 @@ OceENS/
 │   │   ├── database.py               #   SQLite engine and SessionDep dependency
 │   │   ├── security.py               #   Roles, scopes, access control
 │   │   ├── dependencies.py           #   Shared Jinja templates and logger
+│   │   ├── settings_store.py         #   Application settings stored in the database (USD → EUR rate)
 │   │   └── seed.py                   #   Initial data and program synchronisation
 │   │
 │   ├── models/                       # SQLModel schema, one file per table
@@ -314,7 +315,6 @@ OceENS/
 │   │   ├── visualisation_data.py     #   Aggregations and visualisation context
 │   │   ├── llm_client.py             #   Multi-provider LLM client (ollama/openai/anthropic)
 │   │   ├── llm_costs.py              #   Summary cost (measured tokens × price list)
-│   │   ├── settings_store.py         #   Application settings stored in the database (USD → EUR rate)
 │   │   └── export_csv.py             #   CSV export of the answers
 │   │
 │   ├── import/                       # CSV data read by the seed (programs, demo answers)

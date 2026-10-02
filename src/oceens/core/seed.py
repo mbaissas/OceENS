@@ -34,7 +34,7 @@ from oceens.models import (
     Stat,
 )
 from oceens.core.database import engine
-from oceens.services.settings_store import (
+from oceens.core.settings_store import (
     DEFAULT_USD_TO_EUR,
     USD_TO_EUR_KEY,
     get_usd_to_eur,
