@@ -24,7 +24,7 @@ from oceens.models import Summary
 
 # Plafond de durée d'une synthèse, retenu comme durée par ligne en attente
 # (Design Document EPF-MDE/OceENS#120, Spec #171).
-SECONDS_PER_PENDING_JOB = 120
+SECONDS_PER_PENDING_JOB = 20
 
 STATUS_PENDING = 0
 STATUS_DONE = 200
